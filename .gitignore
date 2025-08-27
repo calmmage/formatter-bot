@@ -212,3 +212,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AI instruction files (generated)
+CLAUDE.md
+GEMINI.md
+.cursorrules
+
+# AI instruction files (generated)
+.claude
