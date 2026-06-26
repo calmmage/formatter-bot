@@ -1,7 +1,6 @@
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from calmlib.logging import setup_logger
 from dotenv import load_dotenv
 from loguru import logger
 from pathlib import Path
@@ -22,7 +21,12 @@ dp.include_router(main_router)
 
 
 def main(debug=False) -> None:
-    setup_logger(logger, level="DEBUG" if debug else "INFO")
+    import sys
+
+    # loguru directly — avoid importing calmlib, whose v2 __init__ eagerly imports
+    # rich/pymongo (undeclared deps). See notes-ai.
+    logger.remove()
+    logger.add(sys.stderr, level="DEBUG" if debug else "INFO")
 
     # Initialize Bot instance with a default parse mode
     bot = Bot(
