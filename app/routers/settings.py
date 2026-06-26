@@ -2,63 +2,75 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
-from botspot.user_interactions import ask_user, ask_user_choice
 from botspot.commands_menu import add_command
-from botspot.utils import reply_safe
+from botspot.user_interactions import ask_user, ask_user_choice
+from botspot.utils import send_safe
+
+from app.formats import FORMATS
+from app.store import get_prefs, set_pref
 
 router = Router()
 
-TIMEZONE_SETUP_METHODS = [
-    "Enter timezone name (e.g. 'Europe/London')",
-    "Send location",
-    "Select from common timezones",
+_SETTINGS = [
+    "Default format (auto-render on capture)",
+    "Plaintext: drop vs mention media",
+    "Set Telegraph access token",
+    "Show current settings",
 ]
 
-COMMON_TIMEZONES = ["UTC", "Europe/London", "Europe/Paris", "America/New_York", "Asia/Tokyo"]
 
-
-@add_command("timezone", "Set your timezone", visibility="hidden")
-@router.message(Command("timezone"))
-async def timezone_setup(message: Message, state) -> None:
-    """Interactive timezone setup with multiple input methods"""
-
-    # First, ask user how they want to set their timezone
-    method = await ask_user_choice(
-        message.chat.id, "How would you like to set your timezone?", TIMEZONE_SETUP_METHODS, state
-    )
-
-    if not method:
-        await reply_safe(message, "Timezone setup cancelled.")
+@add_command("settings", "Configure formats & integrations")
+@router.message(Command("settings"))
+async def settings_menu(message: Message, state) -> None:
+    uid = message.from_user.id
+    choice = await ask_user_choice(message.chat.id, "Formatter settings:", _SETTINGS, state)
+    if not choice:
         return
 
-    if method == TIMEZONE_SETUP_METHODS[0]:  # Manual entry
-        timezone = await ask_user(
-            message.chat.id, "Please enter your timezone (e.g. 'Europe/London'):", state
-        )
-        if timezone:
-            # Here you would validate the timezone and save it
-            await reply_safe(message, f"Timezone set to: {timezone}")
+    if choice == _SETTINGS[0]:
+        options = ["(none — always ask)"] + [label for label, _ in FORMATS.values()]
+        picked = await ask_user_choice(message.chat.id, "Default format:", options, state)
+        if not picked:
+            return
+        if picked == options[0]:
+            set_pref(uid, "default_format", None)
+            await send_safe(message.chat.id, "Default format cleared — I'll show the menu each time.")
         else:
-            await reply_safe(message, "Timezone setup cancelled.")
+            key = next(k for k, (label, _) in FORMATS.items() if label == picked)
+            set_pref(uid, "default_format", key)
+            await send_safe(message.chat.id, f"Default format set to {picked}.")
 
-    elif method == TIMEZONE_SETUP_METHODS[1]:  # Location
-        await reply_safe(
-            message, "Please send your location. Note: This feature is not implemented yet."
+    elif choice == _SETTINGS[1]:
+        picked = await ask_user_choice(
+            message.chat.id, "In plaintext, media should be:", ["Mentioned", "Dropped"], state
         )
-        # You would implement location handling here
+        if not picked:
+            return
+        set_pref(uid, "drop_media", picked == "Dropped")
+        await send_safe(message.chat.id, f"Plaintext media: {picked.lower()}.")
 
-    elif method == TIMEZONE_SETUP_METHODS[2]:  # Common list
-        timezone = await ask_user_choice(
-            message.chat.id, "Select your timezone:", COMMON_TIMEZONES, state
+    elif choice == _SETTINGS[2]:
+        token = await ask_user(
+            message.chat.id,
+            "Paste your telegra.ph access token (or 'clear' to remove). "
+            "Leave empty to keep using anonymous pages.",
+            state,
         )
-        if timezone:
-            await reply_safe(message, f"Timezone set to: {timezone}")
-        else:
-            await reply_safe(message, "Timezone setup cancelled.")
+        if token is None:
+            return
+        token = token.strip()
+        set_pref(uid, "telegraph_token", None if token.lower() in ("", "clear") else token)
+        await send_safe(message.chat.id, "Telegraph token updated.")
 
-
-@add_command("error_test", "Test error handling", visibility="hidden")
-@router.message(Command("error_test"))
-async def error_test(message: Message) -> None:
-    """Demonstrate error handling"""
-    raise ValueError("This is a test error!")
+    elif choice == _SETTINGS[3]:
+        p = get_prefs(uid)
+        default = p["default_format"] or "ask each time"
+        media = "dropped" if p["drop_media"] else "mentioned"
+        tg = "set" if p["telegraph_token"] else "anonymous"
+        await send_safe(
+            message.chat.id,
+            f"<b>Your settings</b>\n"
+            f"• Default format: {default}\n"
+            f"• Plaintext media: {media}\n"
+            f"• Telegraph token: {tg}",
+        )

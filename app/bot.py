@@ -1,7 +1,7 @@
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from calmlib.utils import setup_logger, heartbeat_for_sync
+from calmlib.logging import setup_logger
 from dotenv import load_dotenv
 from loguru import logger
 from pathlib import Path
@@ -14,13 +14,13 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from .routers.settings import router as settings_router
 from .router import app, router as main_router
 
-# Initialize bot and dispatcher
+# Initialize bot and dispatcher.
+# Settings router goes first so its commands match before the catch-all capture handler.
 dp = Dispatcher()
-dp.include_router(main_router)
 dp.include_router(settings_router)
+dp.include_router(main_router)
 
 
-@heartbeat_for_sync(app.name)
 def main(debug=False) -> None:
     setup_logger(logger, level="DEBUG" if debug else "INFO")
 
@@ -36,6 +36,7 @@ def main(debug=False) -> None:
         error_handler={"enabled": True},
         ask_user={"enabled": True},
         bot_commands_menu={"enabled": True},
+        message_aggregator={"enabled": True},
     )
 
     # Setup dispatcher with our components

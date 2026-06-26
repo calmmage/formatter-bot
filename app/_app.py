@@ -14,7 +14,7 @@ class AppConfig(BaseSettings):
 
 
 class App:
-    name = "Mini Botspot Template"
+    name = "Formatter Bot"
 
     def __init__(self, **kwargs):
         self.config = AppConfig(**kwargs)

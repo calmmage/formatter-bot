@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "project-name"
-version = "0.0.1"
-description = ""
+name = "formatter-bot"
+version = "0.1.0"
+description = "Capture forwarded Telegram messages (text + media) and re-emit them in many formats"
 authors = ["Petr Lavrov <calmmage@gmail.com>"]
 readme = "README.md"
 packages = [
@@ -9,7 +9,8 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.11,<4.0"
+# botspot@main requires >=3.12
+python = ">=3.12,<4.0"
 # calmlib>=1.0.11
 calmlib = { git = "https://github.com/calmmage/calmlib.git", branch = "main" }
 # botspot>=0.3.0
@@ -21,14 +22,18 @@ toml = ">=0.10"
 python-dotenv = "*"
 pydantic = "^2.10.6"
 pydantic-settings = "^2.7.1"
+# Telegraph export
+httpx = "*"
 
-# Bostpos components
+# Botspot components
 motor = "*"
 apscheduler = "*"
-langchain = "*"
-langchain-openai = "*"
-langchain-community = "*"
-langchain-anthropic = "*"
+# langchain stack unused by formatter-bot — commented out to keep the image slim.
+# Re-enable if a renderer/exporter starts using LLMs.
+# langchain = "*"
+# langchain-openai = "*"
+# langchain-community = "*"
+# langchain-anthropic = "*"
 
 [tool.poetry.group.extras.dependencies]
 # dependencies for extra features

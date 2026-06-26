@@ -1,91 +1,48 @@
-# Botspot Template
+# formatter-bot
 
-A template for creating Telegram bots using [botspot](https://github.com/calmmage/botspot) - a framework built on top of aiogram that provides useful components and utilities.
+Forward it a pile of Telegram messages — text, photos, albums, files, voice — and it **captures**
+the whole burst as one document you can **re-emit** in different formats. Built on
+[botspot](https://github.com/calmmage/botspot); doubles as a showcase of botspot's media handling.
 
-## Features
+## How it works
 
-- 🚀 Quick setup with minimal boilerplate
-- 🛠 Built-in components for common bot features
-- 🔧 Easy configuration via environment variables
-- 📝 Command menu management out of the box
-- ⚡ Error handling and reporting
-- 🔍 Bot URL printing for easy testing
+1. **Capture** — forward/send a burst of messages (albums included). botspot's
+   `message_aggregator` debounces them into one ordered document.
+2. **Pick a format** — the bot replies with an inline keyboard.
+3. **Get the artifact** — a file or a published link comes back.
 
-## Quick Start
+### Formats
 
-1. Clone this template:
+| Format | Media | Output |
+|---|---|---|
+| 📝 Markdown | reference | `.md` file (entities → bold/italic/links/code) |
+| 🌐 HTML | **inline** (data URIs) | self-contained `.html` file |
+| 📄 Plaintext | mention or drop | `.txt` file |
+| 📰 Telegraph | **photos uploaded** | published telegra.ph link |
+
+Roadmap: Notion, PDF, Obsidian-vault drop. See `notes-ai/`.
+
+## Commands
+- `/start`, `/help`
+- `/format` — re-format the last captured batch
+- `/settings` — default format, plaintext media policy, Telegraph token
+
+## Architecture
+One canonical `CapturedDoc` (ordered `Block`s of text + media); every format is a renderer over it.
+`app/models.py` · `app/capture.py` · `app/renderers/` · `app/exporters/` · `app/formats.py` ·
+`app/router.py`.
+
+## Run
 ```bash
-git clone https://github.com/calmmage/botspot-template.git your-bot-name
-cd your-bot-name
-```
-
-2. Install dependencies:
-```bash
+cp example.env .env   # set TELEGRAM_BOT_TOKEN; BOTSPOT_MESSAGE_AGGREGATOR_ENABLED=true is required
 poetry install
-```
-
-3. Set up your environment:
-```bash
-cp example.env .env
-# Edit .env with your bot token and settings
-```
-
-4. Run the bot:
-```bash
 poetry run python run.py
 ```
 
-## Project Structure
+> **Note:** requires a botspot version that includes the `message_aggregator` component
+> (`botspot/components/new/message_aggregator.py`). Ensure `botspot@main` is up to date.
 
-```
-.
-├── app/
-│   ├── _app.py          # Core app
-│   ├── bot.py           # Bot setup & launcher
-│   ├── router.py          
-│   └── __init__.py
-├── example.env         # Example environment variables
-├── pyproject.toml      # Project dependencies
-├── README.md
-├── Dockerfile
-├── docker-compose.yaml
-└── run.py              # Main entry point - for docker etc.
-```
-
-## Configuration
-
-The template uses environment variables for configuration. See `example.env` for available options:
-
-- `TELEGRAM_BOT_TOKEN`: Your bot token from @BotFather
-- `BOTSPOT_PRINT_BOT_URL_ENABLED`: Print bot URL on startup
-- `BOTSPOT_ERROR_HANDLER_ENABLED`: Enable error handling
-- `BOTSPOT_BOT_COMMANDS_MENU_ENABLED`: Enable command menu
-- And more...
-
-## Development
-
-1. Install pre-commit hooks:
-```bash
-pre-commit install
-```
-
-2. Run tests:
+## Tests
 ```bash
 poetry run pytest
 ```
-
-## Docker Support
-
-Build and run with Docker:
-
-```bash
-docker-compose up --build
-```
-
-## License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
