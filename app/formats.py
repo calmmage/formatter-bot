@@ -38,13 +38,22 @@ async def _telegraph(doc: CapturedDoc, prefs: dict) -> Output:
     return Output("text", text=f"📰 Published to Telegraph:\n{url}")
 
 
+async def _post(doc: CapturedDoc, prefs: dict) -> Output:
+    # 'post' sends media groups + text directly (needs bot + FSM state), so the router
+    # intercepts this key and calls app.post.send_as_post instead of produce().
+    raise RuntimeError("'post' is handled by the router, not produce()")
+
+
 # key -> (button label, producer). Order defines keyboard order.
 FORMATS = {
+    "post": ("✈️ Telegram post", _post),
     "markdown": ("📝 Markdown", _markdown),
     "html": ("🌐 HTML", _html),
     "plaintext": ("📄 Plaintext", _plaintext),
     "telegraph": ("📰 Telegraph", _telegraph),
 }
+
+POST_KEY = "post"
 
 
 def labels() -> dict:

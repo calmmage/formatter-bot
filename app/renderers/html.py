@@ -55,6 +55,6 @@ async def _block_html(b: Block) -> str:
 
 
 async def render_html(doc: CapturedDoc) -> str:
-    title = _html.escape(doc.title)
+    title = _html.escape(doc.display_title)
     body = "\n".join([await _block_html(b) for b in doc.blocks])
     return _PAGE.format(title=title, body=body)

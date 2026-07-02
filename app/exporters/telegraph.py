@@ -1,9 +1,10 @@
 """Publish a CapturedDoc to telegra.ph.
 
-Telegraph is the cheapest media-rich publish target: anonymous accounts, instant shareable
-links, hosts images inline. Photos are uploaded to telegra.ph; other media degrade to a text
-mention (Telegraph can't host arbitrary files). Per-user `access_token` is optional — without
-one we mint a throwaway anonymous account.
+Telegraph gives anonymous accounts + instant shareable links and renders images by URL. Its own
+upload endpoint (telegra.ph/upload) was discontinued and now 400s for every image, so photos are
+routed through a pluggable ImageHost (see exporters/imagehost.py). With no host configured,
+media degrades to a text mention. Per-user `access_token` is optional — without one we mint a
+throwaway anonymous account.
 """
 
 import json
@@ -11,12 +12,12 @@ from typing import Optional
 
 import httpx
 
-from app.models import CapturedDoc, MediaKind
-from app.renderers.media import fetch_bytes
+from app.exporters.imagehost import get_image_host
+from app.models import CapturedDoc, MediaItem, MediaKind
+from app.renderers.media import fetch_bytes, mime_for
 from app.renderers.util import media_label
 
 _API = "https://api.telegra.ph"
-_UPLOAD = "https://telegra.ph/upload"
 
 
 async def _get_token(client: httpx.AsyncClient, author: str) -> str:
@@ -28,17 +29,17 @@ async def _get_token(client: httpx.AsyncClient, author: str) -> str:
     return r.json()["result"]["access_token"]
 
 
-async def _upload_photo(client: httpx.AsyncClient, data: bytes) -> Optional[str]:
-    try:
-        r = await client.post(
-            _UPLOAD, files={"file": ("photo.jpg", data, "image/jpeg")}, timeout=30
-        )
-        j = r.json()
-        if isinstance(j, list) and j and "src" in j[0]:
-            return "https://telegra.ph" + j[0]["src"]
-    except Exception:
+async def _host_image(item: MediaItem) -> Optional[str]:
+    """Upload a photo via the configured image host and return its public URL."""
+    host = get_image_host()
+    if host is None:
         return None
-    return None
+    data = await fetch_bytes(item)
+    if not data:
+        return None
+    return await host.upload(
+        data, filename=item.file_name or "photo.jpg", mime=mime_for(item)
+    )
 
 
 async def publish_telegraph(
@@ -55,11 +56,7 @@ async def publish_telegraph(
             if b.text_plain and b.text_plain.strip():
                 nodes.append({"tag": "p", "children": [b.text_plain.strip()]})
             for item in b.media:
-                src = None
-                if item.kind == MediaKind.photo:
-                    data = await fetch_bytes(item)
-                    if data:
-                        src = await _upload_photo(client, data)
+                src = await _host_image(item) if item.kind == MediaKind.photo else None
                 if src:
                     nodes.append({"tag": "figure", "children": [{"tag": "img", "attrs": {"src": src}}]})
                 else:
@@ -72,7 +69,7 @@ async def publish_telegraph(
             f"{_API}/createPage",
             data={
                 "access_token": token,
-                "title": (doc.title or "Captured messages")[:256],
+                "title": (doc.display_title or "Captured messages")[:256],
                 "author_name": author_name,
                 "content": json.dumps(nodes),
                 "return_content": "false",

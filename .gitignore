@@ -220,3 +220,5 @@ GEMINI.md
 
 # AI instruction files (generated)
 .claude
+.venv/
+uv.lock

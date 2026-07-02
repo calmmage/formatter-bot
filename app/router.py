@@ -1,5 +1,6 @@
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
@@ -13,8 +14,10 @@ from botspot.utils import send_safe
 
 from app._app import App
 from app.capture import capture_batch
-from app.formats import FORMATS, produce
+from app.formats import FORMATS, POST_KEY, produce
+from app.post import send_as_post
 from app.store import get_doc, get_prefs, save_doc
+from app.titler import STYLES, generate_title
 
 router = Router()
 app = App()
@@ -29,6 +32,15 @@ def _format_keyboard() -> InlineKeyboardMarkup:
             row = []
     if row:
         rows.append(row)
+    rows.append([InlineKeyboardButton(text="🏷 Title (AI)", callback_data="title:")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _title_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=label, callback_data=f"titlestyle:{key}")]
+        for key, (label, _) in STYLES.items()
+    ]
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -53,6 +65,7 @@ async def help_handler(message: Message):
         "📥 <b>Capture:</b> forward/send a burst of messages (albums included). I group them "
         "into one document.\n\n"
         f"🎚 <b>Formats:</b>\n{fmt_lines}\n\n"
+        "🏷 <b>Title:</b> tap <i>Title (AI)</i> to generate a headline in a style you pick.\n\n"
         "Commands:\n"
         "/format — re-format the last captured batch\n"
         "/settings — default format, media handling, Telegraph token",
@@ -74,7 +87,7 @@ async def format_handler(message: Message):
 
 
 @router.message()
-async def capture_handler(message: Message):
+async def capture_handler(message: Message, state: FSMContext):
     # defensive: let commands fall through to their handlers
     if message.text and message.text.startswith("/"):
         return
@@ -87,8 +100,9 @@ async def capture_handler(message: Message):
     save_doc(uid, doc)
 
     prefs = get_prefs(uid)
-    if prefs.get("default_format") in FORMATS:
-        await _emit(message, prefs["default_format"], doc, prefs)
+    default = prefs.get("default_format")
+    if default in FORMATS:
+        await _dispatch(message, default, doc, prefs, state)
         return
 
     await send_safe(
@@ -99,7 +113,7 @@ async def capture_handler(message: Message):
 
 
 @router.callback_query(F.data.startswith("fmt:"))
-async def on_format(cb: CallbackQuery):
+async def on_format(cb: CallbackQuery, state: FSMContext):
     key = cb.data.split(":", 1)[1]
     doc = get_doc(cb.from_user.id)
     if not doc:
@@ -109,7 +123,47 @@ async def on_format(cb: CallbackQuery):
         await cb.answer("Unknown format.")
         return
     await cb.answer(f"Rendering {key}…")
-    await _emit(cb.message, key, doc, get_prefs(cb.from_user.id))
+    await _dispatch(cb.message, key, doc, get_prefs(cb.from_user.id), state)
+
+
+@router.callback_query(F.data == "title:")
+async def on_title(cb: CallbackQuery):
+    if not get_doc(cb.from_user.id):
+        await cb.answer("Nothing captured — forward messages first.", show_alert=True)
+        return
+    await cb.answer()
+    await cb.message.answer("🏷 Pick a title style:", reply_markup=_title_keyboard())
+
+
+@router.callback_query(F.data.startswith("titlestyle:"))
+async def on_title_style(cb: CallbackQuery):
+    style = cb.data.split(":", 1)[1]
+    doc = get_doc(cb.from_user.id)
+    if not doc:
+        await cb.answer("Nothing captured — forward messages first.", show_alert=True)
+        return
+    await cb.answer("Generating title…")
+    try:
+        title = await generate_title(doc, style)
+    except Exception as e:
+        await send_safe(cb.message.chat.id, f"⚠️ Couldn't generate a title: {e}")
+        return
+    doc.title_override = title  # stored doc is mutated in place
+    await send_safe(
+        cb.message.chat.id,
+        f"🏷 <b>{title}</b>\n\nUsed as the title for post / Telegraph / file outputs.",
+        reply_markup=_format_keyboard(),
+    )
+
+
+async def _dispatch(message: Message, key: str, doc, prefs: dict, state: FSMContext) -> None:
+    if key == POST_KEY:
+        try:
+            await send_as_post(message, doc, prefs, state)
+        except Exception as e:
+            await send_safe(message.chat.id, f"⚠️ Failed to build the post: {e}")
+        return
+    await _emit(message, key, doc, prefs)
 
 
 async def _emit(message: Message, key: str, doc, prefs: dict) -> None:
@@ -121,7 +175,7 @@ async def _emit(message: Message, key: str, doc, prefs: dict) -> None:
     if out.kind == "file" and out.data is not None:
         await message.answer_document(
             BufferedInputFile(out.data, filename=out.filename or "capture.txt"),
-            caption=f"{FORMATS[key][0]} · {doc.title}",
+            caption=f"{FORMATS[key][0]} · {doc.display_title}",
         )
     elif out.text:
         await send_safe(message.chat.id, out.text)

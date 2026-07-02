@@ -5,7 +5,7 @@ from app.renderers.util import html_to_markdown, media_label
 
 
 def render_markdown(doc: CapturedDoc) -> str:
-    parts = [f"# {doc.title}", ""]
+    parts = [f"# {doc.display_title}", ""]
     for b in doc.blocks:
         ts = b.ts.strftime("%H:%M")
         meta = " · ".join(p for p in (b.sender, ts) if p)

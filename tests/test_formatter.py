@@ -71,3 +71,87 @@ def test_markdown_includes_media_reference_and_title():
     out = render_markdown(_doc_with_media())
     assert out.startswith("# ")
     assert "a.pdf" in out
+
+
+# --- title override / display_title ---
+
+
+def test_display_title_prefers_override():
+    doc = _doc_with_media()
+    assert doc.display_title == doc.title  # heuristic before generation
+    doc.title_override = "A Snappy Headline"
+    assert doc.display_title == "A Snappy Headline"
+    assert render_markdown(doc).startswith("# A Snappy Headline")
+
+
+def test_text_excerpt_joins_blocks():
+    base = datetime.datetime(2026, 1, 1, 9, 30)
+    doc = CapturedDoc(
+        user_id=1,
+        created_at=base,
+        blocks=[
+            Block(message_id=1, ts=base, text_plain="first"),
+            Block(message_id=2, ts=base, text_plain="second"),
+        ],
+    )
+    assert doc.text_excerpt == "first\n\nsecond"
+
+
+# --- post text builder ---
+
+
+def test_post_caption_html_leads_with_bold_title():
+    from app.renderers.post import post_caption_html, post_plaintext
+
+    doc = _doc_with_media()
+    doc.title_override = "My Title"
+    html = post_caption_html(doc)
+    assert html.startswith("<b>My Title</b>")
+    assert "hi" in html
+    assert post_plaintext(doc).startswith("My Title")
+
+
+# --- post media partitioning ---
+
+
+def test_runs_split_by_type_and_cap():
+    from app.post import _runs
+
+    photos = [MediaItem(kind=MediaKind.photo, file_id=f"P{i}") for i in range(12)]
+    docs = [MediaItem(kind=MediaKind.document, file_id="D1", file_name="a.pdf")]
+    voice = [MediaItem(kind=MediaKind.voice, file_id="V1")]
+    runs = _runs(photos + docs + voice)
+    # 12 photos -> 10 + 2, then a doc run, then voice singly
+    assert [len(r) for r in runs] == [10, 2, 1, 1]
+    # photos never share a run with the document
+    assert all(m.kind == MediaKind.photo for m in runs[0])
+    assert runs[2][0].kind == MediaKind.document
+    assert runs[3][0].kind == MediaKind.voice
+
+
+# --- telegraph image host seam ---
+
+
+def test_telegraph_uses_image_host(monkeypatch):
+    import asyncio
+
+    from app.exporters import imagehost, telegraph
+
+    class FakeHost:
+        async def upload(self, data, *, filename, mime):
+            return "https://nas.example/img/1.jpg"
+
+    async def fake_fetch(item):
+        return b"bytes"
+
+    monkeypatch.setattr(telegraph, "fetch_bytes", fake_fetch)
+    imagehost.set_image_host(FakeHost())
+    try:
+        item = MediaItem(kind=MediaKind.photo, file_id="P1")
+        src = asyncio.run(telegraph._host_image(item))
+        assert src == "https://nas.example/img/1.jpg"
+    finally:
+        imagehost.set_image_host(None)
+
+    # with no host configured, photo hosting returns None (degrades to text mention)
+    assert asyncio.run(telegraph._host_image(MediaItem(kind=MediaKind.photo, file_id="P2"))) is None

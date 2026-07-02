@@ -60,11 +60,35 @@ rest). Wired into settings/bot_manager/dependency_manager/deps_getters/`__init__
 - Plaintext media default = **mention** (`[📷 photo]`), toggle to drop. Never silently lose media.
 - HTML & Telegraph are the media-carrying formats (Petr: "I want some media supporting format").
 
+## 2026-07-02 update — post format, AI titles, Telegraph reality-check
+Petr feedback round: (1) add a **post** format, (2) **LLM-generated title** with style-picker
+buttons, (3) fix Telegraph media.
+
+- **`post` format** (`app/post.py`) — re-emits the doc as a single Telegram post: media resent by
+  file_id into album(s), combined text as caption/message. Overflow resolved interactively:
+  >10 media → *"First 10" / "All (split albums)"*; text over ~1000 (with media) / ~4000 (plain) →
+  *"Attach as file" / "Split messages" / "Trim"*. Now the primary media-carrying output. Telegram
+  album rules handled: photos/videos grouped, documents/audio in their own runs, voice/video_note
+  sent singly (`_runs`).
+- **AI titles** (`app/titler.py`) — `🏷 Title (AI)` button → style picker (Concise / Descriptive /
+  Catchy / Emoji) → `botspot.aquery_llm_text` (model `claude-4.5-haiku`). Stored on
+  `CapturedDoc.title_override`; `display_title` feeds post header, Telegraph title, file captions.
+  Needs `BOTSPOT_LLM_PROVIDER_ENABLED=true` + `ANTHROPIC_API_KEY` (wired in `bot.py`).
+- **Telegraph media** — root-caused: **`telegra.ph/upload` is discontinued** (400 "Unknown error"
+  for every image, any headers — verified). Reworked into a **pluggable `ImageHost` seam**
+  (`app/exporters/imagehost.py`): telegraph embeds photos by URL from the registered host; default
+  host = None → photos degrade to `[📷 photo]` text mentions (no token leak, no third-party egress).
+
+### Telegraph image host — chosen direction (Petr)
+Host images on the **home NAS**, publish over a **Cloudflare tunnel** → Telegraph embeds that public
+URL. Privacy-preserving (self-hosted, no bot-token exposure, nothing to a third party). Drop-in:
+implement `ImageHost.upload()` against the NAS endpoint + `set_image_host(...)` at startup — the
+telegraph renderer needs no change. **Not built yet** (own infra task).
+
 ## Open follow-ups
-- **Blocking deploy:** botspot changes are local/unpushed — formatter-bot pulls `botspot@main`, so
-  botspot must be committed+pushed before the bot can build/run anywhere but locally.
+- **Telegraph NAS image host** — NAS media hosting + Cloudflare tunnel, implement + register the
+  `ImageHost`. Until then Telegraph media = text mentions.
 - Persist `CapturedDoc` to mongo (survive restarts; file_ids are reasonably long-lived).
-- Telegraph photo upload via `telegra.ph/upload` is semi-official and may rate-limit → falls back to
-  text mention; revisit if it proves flaky.
-- Rename/Coolify: create `formatter-bot` app on NEW (ARM) at deploy time; retire old forwarder app.
-- Live E2E with a real bot token (telegram-bot-tester) — deferred to deploy.
+- Rename Coolify app `forwarder-bot` → `formatter-bot` (Petr: "rename later").
+- Live E2E — the bot is live at @calmmage_Forwarder_bot; forward a burst with a photo album + long
+  text to exercise post overflow + AI title.

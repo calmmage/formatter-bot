@@ -47,6 +47,7 @@ class CapturedDoc(BaseModel):
     user_id: int
     created_at: datetime
     blocks: List[Block] = Field(default_factory=list)
+    title_override: Optional[str] = None  # LLM-generated title, set on demand
 
     @property
     def n_media(self) -> int:
@@ -62,3 +63,14 @@ class CapturedDoc(BaseModel):
         if self.n_media:
             return f"{self.n_media} media item(s)"
         return "Captured messages"
+
+    @property
+    def display_title(self) -> str:
+        """Preferred title: the LLM-generated one if present, else the heuristic."""
+        return self.title_override or self.title
+
+    @property
+    def text_excerpt(self) -> str:
+        """Combined plain text of all blocks — source material for title generation."""
+        parts = [b.text_plain.strip() for b in self.blocks if b.text_plain and b.text_plain.strip()]
+        return "\n\n".join(parts)
