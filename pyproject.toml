@@ -28,6 +28,10 @@ httpx = "*"
 # Botspot components
 motor = "*"
 apscheduler = "*"
+# botspot's llm_provider (AI titles) uses litellm, which lives in botspot's optional
+# 'extras' dependency-group — the poetry git install does NOT pull it in, so declare it here
+# (same reason motor/apscheduler are listed explicitly).
+litellm = ">=1.63,<2.0"
 # langchain stack unused by formatter-bot — commented out to keep the image slim.
 # Re-enable if a renderer/exporter starts using LLMs.
 # langchain = "*"
