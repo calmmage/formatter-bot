@@ -5,18 +5,21 @@ from app.renderers.util import media_label
 
 
 def render_plaintext(doc: CapturedDoc, drop_media: bool = False) -> str:
-    parts = []
+    groups: list[tuple[str | None, list[str]]] = []
     for b in doc.blocks:
-        chunk = []
-        ts = b.ts.strftime("[%H:%M]")
-        header = " ".join(p for p in (ts, b.sender) if p)
+        chunk: list[str] = []
         if b.text_plain and b.text_plain.strip():
-            chunk.append(f"{header}\n{b.text_plain.strip()}" if header else b.text_plain.strip())
-        elif header:
-            chunk.append(header)
+            chunk.append(b.text_plain.strip())
         if not drop_media:
             for item in b.media:
                 chunk.append(f"[{media_label(item)}]")
         if chunk:
-            parts.append("\n".join(chunk))
+            sender = b.sender.strip() if b.sender and b.sender.strip() else None
+            if not groups or groups[-1][0] != sender:
+                groups.append((sender, []))
+            groups[-1][1].extend(chunk)
+
+    parts = []
+    for sender, lines in groups:
+        parts.append(f"{sender}:\n" + "\n".join(lines) if sender else "\n".join(lines))
     return "\n\n".join(parts)

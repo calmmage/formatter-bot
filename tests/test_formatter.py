@@ -111,6 +111,76 @@ def test_post_caption_html_leads_with_bold_title():
     assert post_plaintext(doc).startswith("My Title")
 
 
+def test_post_text_groups_consecutive_blocks_by_sender():
+    from app.renderers.post import post_caption_html, post_plaintext
+
+    base = datetime.datetime(2026, 1, 1, 9, 30)
+    doc = CapturedDoc(
+        user_id=1,
+        created_at=base,
+        title_override="My Title",
+        blocks=[
+            Block(message_id=1, ts=base, sender="Alice", text_html="first", text_plain="first"),
+            Block(message_id=2, ts=base, sender="Alice", text_html="second", text_plain="second"),
+            Block(message_id=3, ts=base, sender="Bob", text_html="third", text_plain="third"),
+        ],
+    )
+
+    assert post_plaintext(doc) == "My Title\n\nAlice:\nfirst\nsecond\n\nBob:\nthird"
+    assert post_caption_html(doc) == "<b>My Title</b>\n\n<b>Alice</b>:\nfirst\nsecond\n\n<b>Bob</b>:\nthird"
+
+
+def test_plaintext_groups_consecutive_blocks_by_sender():
+    base = datetime.datetime(2026, 1, 1, 9, 30)
+    doc = CapturedDoc(
+        user_id=1,
+        created_at=base,
+        blocks=[
+            Block(message_id=1, ts=base, sender="Alice", text_plain="first"),
+            Block(message_id=2, ts=base, sender="Alice", text_plain="second"),
+            Block(message_id=3, ts=base, sender="Bob", text_plain="third"),
+        ],
+    )
+
+    assert render_plaintext(doc) == "Alice:\nfirst\nsecond\n\nBob:\nthird"
+
+
+def test_title_generation_uses_cheap_model(monkeypatch):
+    import asyncio
+
+    from app import titler
+
+    captured = {}
+
+    async def fake_query(prompt, **kwargs):
+        captured["prompt"] = prompt
+        captured.update(kwargs)
+        return "Generated Title"
+
+    monkeypatch.setattr(titler, "aquery_llm_text", fake_query)
+
+    title = asyncio.run(titler.generate_title(_doc_with_media(), "concise"))
+
+    assert title == "Generated Title"
+    assert captured["model"] == titler.TITLE_MODEL
+
+
+def test_ensure_title_sets_generated_title(monkeypatch):
+    import asyncio
+
+    from app import titler
+
+    async def fake_generate_title(doc, style):
+        return "Generated Title"
+
+    doc = _doc_with_media()
+    monkeypatch.setattr(titler, "generate_title", fake_generate_title)
+
+    asyncio.run(titler.ensure_title(doc))
+
+    assert doc.title_override == "Generated Title"
+
+
 # --- post media partitioning ---
 
 

@@ -17,7 +17,7 @@ from app.capture import capture_batch
 from app.formats import FORMATS, POST_KEY, produce
 from app.post import send_as_post
 from app.store import get_doc, get_prefs, save_doc
-from app.titler import STYLES, generate_title
+from app.titler import STYLES, ensure_title, generate_title
 
 router = Router()
 app = App()
@@ -157,6 +157,7 @@ async def on_title_style(cb: CallbackQuery):
 
 
 async def _dispatch(message: Message, key: str, doc, prefs: dict, state: FSMContext) -> None:
+    await ensure_title(doc)
     if key == POST_KEY:
         try:
             await send_as_post(message, doc, prefs, state)

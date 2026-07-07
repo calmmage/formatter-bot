@@ -43,18 +43,30 @@ async def _media_html(item: MediaItem) -> str:
     return f'<a class="file" href="{uri}" download="{fname}">⬇️ {label}</a>'
 
 
-async def _block_html(b: Block) -> str:
-    ts = b.ts.strftime("%H:%M")
-    meta = " · ".join(p for p in (b.sender, ts) if p)
-    parts = [f'<div class="meta">{_html.escape(meta)}</div>'] if meta else []
-    if b.text_html:
-        parts.append(f"<div>{b.text_html}</div>")
+async def _block_body_html(b: Block) -> str:
+    parts = []
+    if b.text_html and b.text_html.strip():
+        parts.append(f"<div>{b.text_html.strip()}</div>")
     for item in b.media:
         parts.append(await _media_html(item))
-    return f'<div class="block">{"".join(parts)}</div>'
+    return "".join(parts)
 
 
 async def render_html(doc: CapturedDoc) -> str:
     title = _html.escape(doc.display_title)
-    body = "\n".join([await _block_html(b) for b in doc.blocks])
+    groups: list[tuple[str | None, list[Block]]] = []
+    for block in doc.blocks:
+        if not block.text_html and not block.media:
+            continue
+        sender = block.sender.strip() if block.sender and block.sender.strip() else None
+        if not groups or groups[-1][0] != sender:
+            groups.append((sender, []))
+        groups[-1][1].append(block)
+
+    chunks = []
+    for sender, blocks in groups:
+        parts = [f'<div class="meta">{_html.escape(sender)}:</div>'] if sender else []
+        parts.extend([await _block_body_html(block) for block in blocks])
+        chunks.append(f'<div class="block">{"".join(parts)}</div>')
+    body = "\n".join(chunks)
     return _PAGE.format(title=title, body=body)

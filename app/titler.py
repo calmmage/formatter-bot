@@ -4,6 +4,7 @@ Uses botspot's LLM provider (enabled via BOTSPOT_LLM_PROVIDER_ENABLED) so the mo
 framework-managed. The style is user-picked via buttons; each maps to a one-line instruction.
 """
 
+import os
 from typing import Dict, Tuple
 
 from botspot.components.new.llm_provider import aquery_llm_text
@@ -19,6 +20,8 @@ STYLES: Dict[str, Tuple[str, str]] = {
 }
 
 _MAX_SOURCE = 2000  # chars of the doc fed to the model
+TITLE_MODEL = "gpt-4.1-nano"
+TITLE_MODEL_ENV = "FORMATTER_BOT_TITLE_MODEL"
 
 
 def _source(doc: CapturedDoc) -> str:
@@ -39,7 +42,18 @@ async def generate_title(doc: CapturedDoc, style: str) -> str:
     text = await aquery_llm_text(
         prompt,
         system_message="You write short, accurate titles for captured message threads.",
+        model=os.getenv(TITLE_MODEL_ENV, TITLE_MODEL),
         max_tokens=40,
     )
     title = (text or "").strip().strip("\"'").splitlines()[0] if text else ""
     return title[:100] or doc.title
+
+
+async def ensure_title(doc: CapturedDoc, style: str = "concise") -> None:
+    """Populate title_override with a cheap generated title if it is not already set."""
+    if doc.title_override:
+        return
+    try:
+        doc.title_override = await generate_title(doc, style)
+    except Exception:
+        doc.title_override = doc.title

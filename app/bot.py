@@ -10,8 +10,8 @@ from botspot.core.bot_manager import BotManager
 # Load environment variables
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from .routers.settings import router as settings_router
-from .router import app, router as main_router
+from .routers.settings import router as settings_router  # noqa: E402
+from .router import app, router as main_router  # noqa: E402
 
 # Initialize bot and dispatcher.
 # Settings router goes first so its commands match before the catch-all capture handler.
@@ -41,9 +41,9 @@ def main(debug=False) -> None:
         ask_user={"enabled": True},
         bot_commands_menu={"enabled": True},
         message_aggregator={"enabled": True},
-        # LLM titles (single-user bot -> allow_everyone). Key + model come from env:
-        # ANTHROPIC_API_KEY, BOTSPOT_LLM_PROVIDER_DEFAULT_MODEL=claude-4.5-haiku.
-        llm_provider={"enabled": True, "allow_everyone": True, "default_model": "claude-4.5-haiku"},
+        # LLM titles (single-user bot -> allow_everyone). Title generation passes its own
+        # cheap model override; this default is only a fallback for other LLM calls.
+        llm_provider={"enabled": True, "allow_everyone": True, "default_model": "gpt-4.1-nano"},
     )
 
     # Setup dispatcher with our components
