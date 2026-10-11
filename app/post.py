@@ -18,6 +18,7 @@ from aiogram.types import (
 )
 from botspot.user_interactions import ask_user_choice
 from botspot.utils import get_bot, send_safe
+from botspot.utils.text_utils import split_long_message
 
 from app.models import CapturedDoc, MediaItem, MediaKind
 from app.renderers.markdown import render_markdown
@@ -157,7 +158,9 @@ async def send_as_post(message, doc: CapturedDoc, prefs: dict, state: FSMContext
     if not has_media:
         if text_mode == "file":
             await _send_text_file(bot, chat_id, doc)
-        else:  # inline or split — send_safe auto-splits long text
+        elif text_mode == "split":
+            await _send_split_text(bot, chat_id, plain)
+        else:
             await send_safe(chat_id, post_caption_html(doc))
         return
 
@@ -165,10 +168,23 @@ async def send_as_post(message, doc: CapturedDoc, prefs: dict, state: FSMContext
     if text_mode == "file":
         await _send_text_file(bot, chat_id, doc)
     elif text_mode == "split":
-        await send_safe(chat_id, plain)  # auto-split into <=4096 chunks
+        await _send_split_text(bot, chat_id, plain)
     elif text_mode == "inline" and not caption_used:
         # media types couldn't hold a caption (e.g. only video notes) — send text separately
         await send_safe(chat_id, post_caption_html(doc))
+
+
+async def _send_split_text(bot, chat_id: int, text: str) -> None:
+    """Send text as chat messages, cut at Telegram's 4096-char limit.
+
+    send_safe cannot do this. Its default attaches anything over the limit as a
+    timestamped .txt file, which is the "attach as file" outcome.
+    """
+    for chunk in split_long_message(text):
+        if chunk:
+            # parse_mode=None overrides the bot's HTML default so '<' in the
+            # captured text is not parsed as a tag.
+            await bot.send_message(chat_id, chunk, parse_mode=None)
 
 
 async def _send_run_plain_caption(bot, chat_id: int, run: List[MediaItem], caption: str) -> None:
