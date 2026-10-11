@@ -10,7 +10,9 @@ packages = [
 
 [tool.poetry.dependencies]
 # botspot@main requires >=3.12
-python = ">=3.12,<4.0"
+# aiogram 3.31 (via botspot 0.10.41) caps Python at <3.15. Poetry solves the
+# whole declared range, so <4.0 makes `poetry install` fail in the image.
+python = ">=3.12,<3.15"
 # calmlib>=1.0.11
 calmlib = { git = "https://github.com/calmmage/calmlib.git", branch = "main" }
 # botspot>=0.3.0
